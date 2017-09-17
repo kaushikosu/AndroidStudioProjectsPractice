@@ -1,70 +1,48 @@
 package com.hfad.stopwatch;
 
 
-import android.content.res.Configuration;
+import android.content.SharedPreferences;
+import android.os.Bundle;
 import android.os.Handler;
 import android.support.v7.app.AppCompatActivity;
-import android.os.Bundle;
 import android.view.View;
 import android.widget.TextView;
 
 public class StopwatchActivity extends AppCompatActivity {
 
-    private int seconds = 0;
+    private long milliseconds;
     private boolean running;
-    private boolean wasRunning;
-
+    private long prevTime;
+    TextView timeView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_stopwatch);
-        if (savedInstanceState != null){
-            seconds = savedInstanceState.getInt("seconds");
-            running = savedInstanceState.getBoolean("running");
-            wasRunning = savedInstanceState.getBoolean("wasRunning");
+        timeView = (TextView) findViewById(R.id.time_view);
+        loadPreferences();
+        if (running){
+            addElapsedTimeToTimer();
+            runTimer();
         }
-        runTimer();
+        else{
+            if (milliseconds != 0){
+                timeView.setText(getTimeString(milliseconds));
+            }
+        }
     }
 
     @Override
-    protected void onStart(){
-        super.onStart();
-        if (wasRunning){
-            running = true;
-        }
+    protected void onDestroy() {
+        savePreferences();
+        super.onDestroy();
     }
-    @Override
-    protected void onResume(){
-        super.onResume();
-        if (wasRunning){
-            running = true;
-        }
-    }
-    @Override
-    protected void onPause(){
-        super.onPause();
-        wasRunning = running;
-        running = false;
-    }
-    @Override
-    protected void onStop(){
-        super.onStop();
-        wasRunning = running;
-        running = false;
-    }
-
-    @Override
-    public void onSaveInstanceState(Bundle savedInstanceState){
-        savedInstanceState.putInt("seconds", seconds);
-        savedInstanceState.putBoolean("running", running);
-        savedInstanceState.putBoolean("wasRunning", wasRunning);
-    }
-
-    // there is an onDestroy() in the final life cycle
 
     public void onClickStart(View view){
-        running = true;
+        if (!running) {
+            running = true;
+            runTimer();
+        }
     }
 
     public void onClickStop(View view){
@@ -73,28 +51,58 @@ public class StopwatchActivity extends AppCompatActivity {
 
     public void onClickReset(View view){
         running = false;
-        seconds = 0;
+        milliseconds = 0;
+        clearTimeView();
     }
 
+    private void clearTimeView(){
+        timeView.setText(getTimeString(0));
+    }
+
+    private String getTimeString(long milliseconds){
+        int millisecs = (int)(milliseconds % 1000);
+        int secs = (int)((milliseconds/1000)% 60);
+        int minutes = (int)((milliseconds/1000/60)%60);
+        long hours = milliseconds/1000/60/60;
+
+
+        String time = String.format("%d:%02d:%02d:%d", hours, minutes, secs,millisecs/100);
+        return time;
+    }
+
+    private void savePreferences(){
+        SharedPreferences sharedPreferences = getPreferences(MODE_PRIVATE);
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putLong("milliseconds", milliseconds);
+        editor.putBoolean("running", running);
+        if (running)
+            editor.putLong("prevTime", System.currentTimeMillis());
+        editor.commit();
+    }
+
+    private void loadPreferences(){
+        SharedPreferences sharedPreferences = getPreferences(MODE_PRIVATE);
+        milliseconds = sharedPreferences.getLong("milliseconds",0);
+        running = sharedPreferences.getBoolean("running",false);
+        prevTime = sharedPreferences.getLong("prevTime",0);
+    }
+
+    private void addElapsedTimeToTimer(){
+        long elapsedTime = System.currentTimeMillis() - prevTime;
+        milliseconds += elapsedTime;
+        timeView.setText(getTimeString(milliseconds));
+    }
 
     private void runTimer() {
-        final TextView timeView = (TextView) findViewById(R.id.time_view);
         final Handler handler = new Handler();
         handler.post(new Runnable() {
             @Override
             public void run() {
-                int hours = seconds/3600;
-                int minutes = (seconds%3600)/60;
-                int secs = seconds%60;
-                String time = String.format("%d:%02d:%02d", hours, minutes, secs);
-                timeView.setText(time);
-
                 if (running) {
-                    seconds++;
+                    milliseconds+=100;
+                    timeView.setText(getTimeString(milliseconds));
+                    handler.postDelayed(this, 100);
                 }
-
-                handler.postDelayed(this, 1000);
-
             }
         });
     }
